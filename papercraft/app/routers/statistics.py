@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List, Dict, Any
 
 from app.database import get_db
@@ -26,7 +26,12 @@ def compare_batches(data: BatchComparison, db: Session = Depends(get_db)):
     results = []
     for batch in batches:
         concentrations = db.query(VatConcentration).filter(VatConcentration.batch_id == batch.id).all()
-        records = db.query(PapermakingRecord).filter(PapermakingRecord.batch_id == batch.id).all()
+        records = (
+            db.query(PapermakingRecord)
+            .options(joinedload(PapermakingRecord.observations))
+            .filter(PapermakingRecord.batch_id == batch.id)
+            .all()
+        )
         results.append(BatchTraceOut(
             batch=batch,
             concentrations=concentrations,
@@ -42,7 +47,12 @@ def trace_batch(batch_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="配浆批次不存在")
 
     concentrations = db.query(VatConcentration).filter(VatConcentration.batch_id == batch_id).all()
-    records = db.query(PapermakingRecord).filter(PapermakingRecord.batch_id == batch_id).all()
+    records = (
+        db.query(PapermakingRecord)
+        .options(joinedload(PapermakingRecord.observations))
+        .filter(PapermakingRecord.batch_id == batch_id)
+        .all()
+    )
     return BatchTraceOut(
         batch=batch,
         concentrations=concentrations,
