@@ -10,6 +10,7 @@ const App = {
         statistics: StatisticsPage,
         summary: SummaryPage,
         templates: TemplatesPage,
+        images: ImagesPage,
     },
 
     init() {

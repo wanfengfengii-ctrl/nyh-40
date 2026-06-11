@@ -114,4 +114,44 @@ const API = {
         replicate: (templateId, data) => API.request(`/templates/${templateId}/replicate`, { method: 'POST', body: data }),
         listReplications: (templateId) => API.request(`/templates/${templateId}/replications`),
     },
+
+    images: {
+        upload: async (formData) => {
+            const url = `${API_BASE}/images/upload`;
+            try {
+                const response = await fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || `上传失败: ${response.status}`);
+                }
+                return data;
+            } catch (error) {
+                console.error('API Error:', error);
+                throw error;
+            }
+        },
+        list: (params = {}) => {
+            const query = new URLSearchParams(params).toString();
+            return API.request(`/images${query ? `?${query}` : ''}`);
+        },
+        get: (id) => API.request(`/images/${id}`),
+        update: (id, data) => API.request(`/images/${id}`, { method: 'PUT', body: data }),
+        delete: (id) => API.request(`/images/${id}`, { method: 'DELETE' }),
+        toggleHidden: (id) => API.request(`/images/${id}/toggle-hidden`, { method: 'POST' }),
+        toggleTypical: (id) => API.request(`/images/${id}/toggle-typical`, { method: 'POST' }),
+        getFileUrl: (id) => `${API_BASE}/images/${id}/file`,
+        addAnnotation: (imageId, data) => API.request(`/images/${imageId}/annotations`, { method: 'POST', body: data }),
+        listAnnotations: (imageId) => API.request(`/images/${imageId}/annotations`),
+        updateAnnotation: (annotationId, data) => API.request(`/images/annotations/${annotationId}`, { method: 'PUT', body: data }),
+        deleteAnnotation: (annotationId) => API.request(`/images/annotations/${annotationId}`, { method: 'DELETE' }),
+        compare: (imageIds) => API.request('/images/compare', { method: 'POST', body: { image_ids: imageIds } }),
+        getBatchTimeline: (batchId, includeHidden = false) => API.request(`/images/batch/${batchId}/timeline?include_hidden=${includeHidden}`),
+        getSummary: (params = {}) => {
+            const query = new URLSearchParams(params).toString();
+            return API.request(`/images/summary${query ? `?${query}` : ''}`);
+        },
+    },
 };

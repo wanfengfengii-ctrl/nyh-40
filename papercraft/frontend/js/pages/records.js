@@ -140,6 +140,7 @@ const RecordsPage = {
                         </div>
                         <div class="flex items-center gap-2" onclick="event.stopPropagation()">
                             <span class="text-sm text-gray-400">${observations.length} 条观察</span>
+                            <button class="btn btn-sm btn-outline" onclick="RecordsPage.viewRecordImages(${record.id})">📷 图片</button>
                             <button class="btn btn-sm btn-outline" onclick="RecordsPage.openEditRecordModal(${record.id})">编辑</button>
                             <button class="btn btn-sm btn-danger" onclick="RecordsPage.deleteRecord(${record.id})">删除</button>
                         </div>
@@ -196,6 +197,7 @@ const RecordsPage = {
                                 <td class="px-3 py-2 text-sm text-gray-600 max-w-xs truncate" title="${obs.notes || ''}">${obs.notes || '-'}</td>
                                 <td class="px-3 py-2">
                                     <div class="flex gap-1">
+                                        <button class="btn btn-xs btn-outline" onclick="RecordsPage.viewObservationImages(${recordId}, ${obs.id})">📷</button>
                                         <button class="btn btn-xs btn-outline" onclick="RecordsPage.openEditObservationModal(${recordId}, ${obs.id})">编辑</button>
                                         <button class="btn btn-xs btn-danger" onclick="RecordsPage.deleteObservation(${recordId}, ${obs.id})">删除</button>
                                     </div>
@@ -551,6 +553,25 @@ const RecordsPage = {
             },
             { title: '删除成纸观察', confirmText: '确认删除', type: 'danger' }
         );
+    },
+
+    viewRecordImages(recordId) {
+        ImagesPage.openImageManager({
+            title: `抄纸记录 #${recordId} - 图片管理`,
+            recordId: recordId,
+            batchId: this.selectedBatchId,
+            defaultCategory: 'wet_paper',
+        });
+    },
+
+    viewObservationImages(recordId, observationId) {
+        ImagesPage.openImageManager({
+            title: `成纸观察 #${observationId} - 图片管理`,
+            observationId: observationId,
+            recordId: recordId,
+            batchId: this.selectedBatchId,
+            defaultCategory: 'microscopy',
+        });
     },
 
     unmount() {},

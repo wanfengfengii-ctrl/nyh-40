@@ -62,6 +62,7 @@ const SummaryPage = {
                         </div>
                     </div>
                 </div>
+                ${this.renderImageSummary()}
             </div>
         `);
 
@@ -368,6 +369,102 @@ const SummaryPage = {
             this.fillerChart.destroy();
             this.fillerChart = null;
         }
+    },
+
+    renderImageSummary() {
+        const imgSummary = this.data.image_summary;
+        if (!imgSummary || imgSummary.total_images === 0) {
+            return `
+                <div class="card">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">📷 实验图片汇总</h3>
+                    <div class="text-center py-8 text-gray-400">
+                        <div class="text-4xl mb-2">📷</div>
+                        <p>暂无实验图片数据</p>
+                        <p class="text-sm mt-1">请在材料、批次、抄纸记录或成纸观察中上传图片</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        const byCategory = imgSummary.by_category || {};
+        const categoryLabels = {
+            raw_material: '🌾 原料',
+            wet_paper: '💧 湿纸页',
+            dry_paper: '📄 成纸',
+            microscopy: '🔬 显微结构',
+        };
+
+        const typicalSummary = imgSummary.typical_summary || [];
+
+        return `
+            <div class="card">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-gray-800">📷 实验图片汇总</h3>
+                    <div class="flex items-center gap-4 text-sm text-gray-500">
+                        <span>共 ${imgSummary.total_images} 张</span>
+                        <span>可见 ${imgSummary.visible_images} 张</span>
+                        <span>⭐ 典型 ${imgSummary.typical_images} 张</span>
+                    </div>
+                </div>
+                <div class="grid grid-cols-4 gap-4 mb-6">
+                    ${Object.entries(categoryLabels).map(([key, label]) => `
+                        <div class="text-center p-3 bg-gray-50 rounded-lg">
+                            <div class="text-2xl font-bold text-gray-800">${byCategory[key] || 0}</div>
+                            <div class="text-sm text-gray-500">${label}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                ${typicalSummary.length > 0 ? `
+                    <div class="border-t pt-4">
+                        <h4 class="font-medium text-gray-700 mb-4">⭐ 典型图例与观察结论</h4>
+                        <div class="space-y-6">
+                            ${typicalSummary.map(section => this.renderTypicalSection(section)).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    },
+
+    renderTypicalSection(section) {
+        const images = section.images || [];
+        const notes = section.observation_notes || [];
+
+        return `
+            <div>
+                <h5 class="font-medium text-gray-800 mb-3">${section.category_name}</h5>
+                <div class="grid grid-cols-1 lg:grid-cols-${Math.min(images.length + 1, 3)} gap-4">
+                    <div class="grid grid-cols-${Math.min(images.length, 4)} gap-3">
+                        ${images.map(img => `
+                            <div class="border border-gray-200 rounded-lg overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
+                                 onclick="ImagesPage.openImageDetail(${img.id})">
+                                <div class="aspect-video bg-gray-100 overflow-hidden">
+                                    <img src="${API.images.getFileUrl(img.id)}" class="w-full h-full object-contain"
+                                         onerror="this.parentElement.innerHTML='<span class=\\'text-3xl text-gray-300 flex items-center justify-center h-full\\'>📷</span>'">
+                                </div>
+                                <div class="p-2">
+                                    <p class="text-xs font-medium text-gray-800 truncate">${img.title || img.file_name}</p>
+                                    ${img.description ? `<p class="text-xs text-gray-500 line-clamp-2">${img.description}</p>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                    ${notes.length > 0 ? `
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                            <h6 class="font-medium text-amber-800 mb-2">📝 观察结论</h6>
+                            <ul class="space-y-2">
+                                ${notes.map(note => `
+                                    <li class="text-sm text-amber-700 flex items-start gap-2">
+                                        <span class="text-amber-400 mt-1">•</span>
+                                        <span>${note}</span>
+                                    </li>
+                                `).join('')}
+                            </ul>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
     },
 
     unmount() {

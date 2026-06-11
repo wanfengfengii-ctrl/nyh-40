@@ -92,6 +92,7 @@ const BatchesPage = {
                 <td class="px-4 py-3">
                     <div class="flex flex-wrap gap-1">
                         <button class="btn btn-sm btn-outline" onclick="BatchesPage.viewDetail(${batch.id})">详情</button>
+                        <button class="btn btn-sm btn-outline" onclick="BatchesPage.viewBatchImages(${batch.id})">📷 图片</button>
                         ${!batch.is_sealed ? `
                             <button class="btn btn-sm btn-outline" onclick="BatchesPage.openEditModal(${batch.id})">编辑</button>
                             <button class="btn btn-sm btn-primary" onclick="BatchesPage.manageComponents(${batch.id})">成分</button>
@@ -613,6 +614,17 @@ const BatchesPage = {
 
     viewDetail(batchId) {
         window.location.hash = `#/compare?batchId=${batchId}`;
+    },
+
+    viewBatchImages(batchId) {
+        const batch = this.batches.find(b => b.id === batchId);
+        if (!batch) return;
+        window.location.hash = `#/compare?batchId=${batchId}`;
+        setTimeout(() => {
+            if (ComparePage.viewMode !== 'imageTimeline') {
+                ComparePage.switchViewMode('imageTimeline');
+            }
+        }, 500);
     },
 
     unmount() {},

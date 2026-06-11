@@ -5,6 +5,7 @@ const ComparePage = {
     selectedBatchIds: [],
     compareData: null,
     traceData: null,
+    imageTimelineData: null,
     singleBatchId: null,
     fibers: [],
     sizingAgents: [],
@@ -114,6 +115,7 @@ const ComparePage = {
                 ${this.selectedBatchIds.length > 0 ? this.renderViewTabs() : ''}
                 ${this.selectedBatchIds.length > 0 && this.viewMode === 'info' ? this.renderBatchInfo() : ''}
                 ${this.selectedBatchIds.length > 0 && this.viewMode === 'timeline' ? this.renderTimeline() : ''}
+                ${this.selectedBatchIds.length > 0 && this.viewMode === 'imageTimeline' ? this.renderImageTimeline() : ''}
             </div>
         `;
         App.setPageContent(content);
@@ -252,6 +254,7 @@ const ComparePage = {
         const tabs = [
             { id: 'info', name: '基本信息', icon: '📋' },
             { id: 'timeline', name: '回溯时间线', icon: '⏱️' },
+            { id: 'imageTimeline', name: '图片时间线', icon: '📷' },
         ];
 
         return `
@@ -703,7 +706,20 @@ const ComparePage = {
             loading(true);
             await this.loadTraceData(this.selectedBatchIds[0]);
         }
+        if (viewMode === 'imageTimeline' && this.selectedBatchIds.length > 0) {
+            loading(true);
+            await this.loadImageTimeline(this.selectedBatchIds[0]);
+        }
         this.render();
+    },
+
+    async loadImageTimeline(batchId) {
+        try {
+            this.imageTimelineData = await API.images.getBatchTimeline(batchId, true);
+        } catch (error) {
+            showToast('加载图片时间线失败: ' + error.message, 'error');
+            this.imageTimelineData = null;
+        }
     },
 
     switchToCompare(batchId) {
@@ -746,6 +762,112 @@ const ComparePage = {
         link.download = `批次对比_${new Date().toLocaleDateString('zh-CN')}.csv`;
         link.click();
         showToast('导出成功', 'success');
+    },
+
+    renderImageTimeline() {
+        if (!this.imageTimelineData) {
+            return `
+                <div class="card text-center py-8">
+                    <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-500 border-t-transparent mx-auto mb-4"></div>
+                    <p class="text-gray-500">正在加载图片时间线...</p>
+                </div>
+            `;
+        }
+
+        const timeline = this.imageTimelineData.timeline || [];
+        if (timeline.length === 0) {
+            return `
+                <div class="card">
+                    <div class="text-center py-12">
+                        <div class="text-5xl mb-3">📷</div>
+                        <p class="text-gray-500 mb-3">该批次暂无实验图片</p>
+                        <button class="btn btn-primary" onclick="ImagesPage.openUploadModal(${this.selectedBatchIds[0]})">
+                            ➕ 上传实验图片
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        const phaseIcons = {
+            raw_material: '🌾',
+            wet_paper: '💧',
+            dry_paper: '📄',
+            microscopy: '🔬',
+        };
+
+        const phaseColors = {
+            raw_material: 'bg-green-500',
+            wet_paper: 'bg-blue-500',
+            dry_paper: 'bg-amber-500',
+            microscopy: 'bg-purple-500',
+        };
+
+        return `
+            <div class="card">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="font-semibold text-gray-800">📷 图片时间线 — ${this.imageTimelineData.batch_no}</h3>
+                    <button class="btn btn-sm btn-success" onclick="ImagesPage.openUploadModal(${this.selectedBatchIds[0]})">
+                        ➕ 上传图片
+                    </button>
+                </div>
+                <div class="relative">
+                    <div class="absolute left-6 top-0 bottom-0 w-0.5 bg-gray-200"></div>
+                    <div class="space-y-8">
+                        ${timeline.map(phase => this.renderImageTimelinePhase(phase, phaseIcons, phaseColors)).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    },
+
+    renderImageTimelinePhase(phase, phaseIcons, phaseColors) {
+        const icon = phaseIcons[phase.phase.replace(/_\d+$/, '')] || '📷';
+        const color = phaseColors[phase.phase.replace(/_\d+$/, '')] || 'bg-gray-500';
+        const images = phase.images || [];
+
+        return `
+            <div class="relative pl-14">
+                <div class="absolute left-4 w-5 h-5 ${color} rounded-full border-4 border-white shadow flex items-center justify-center">
+                    <span class="text-xs">${icon}</span>
+                </div>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="font-medium text-gray-800">${phase.phase_title}</span>
+                            <span class="text-xs text-gray-400">${formatDateTime(phase.timestamp)}</span>
+                        </div>
+                        <span class="text-xs text-gray-500">${images.length} 张图片</span>
+                    </div>
+                    ${images.length > 0 ? `
+                        <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+                            ${images.map(img => `
+                                <div class="bg-white rounded-lg border border-gray-200 overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
+                                     onclick="ComparePage.openTimelineImageDetail(${img.id})">
+                                    <div class="aspect-square bg-gray-100 overflow-hidden">
+                                        <img src="${API.images.getFileUrl(img.id)}" class="w-full h-full object-cover"
+                                             onerror="this.parentElement.innerHTML='<span class=\\'text-3xl text-gray-300 flex items-center justify-center h-full\\'>📷</span>'">
+                                    </div>
+                                    <div class="p-2">
+                                        <p class="text-xs font-medium text-gray-800 truncate">${img.title || img.file_name}</p>
+                                        ${img.description ? `<p class="text-xs text-gray-500 truncate">${img.description}</p>` : ''}
+                                        <div class="flex items-center gap-1 mt-1">
+                                            ${img.is_typical ? '<span class="text-xs text-yellow-500">⭐</span>' : ''}
+                                            ${img.is_hidden ? '<span class="text-xs text-gray-400">隐藏</span>' : ''}
+                                            ${img.annotations && img.annotations.length > 0 ? `<span class="text-xs text-gray-400">📌${img.annotations.length}</span>` : ''}
+                                        </div>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-sm text-gray-400">暂无图片</p>'}
+                </div>
+            </div>
+        `;
+    },
+
+    openTimelineImageDetail(imageId) {
+        ImagesPage.openImageDetail(imageId);
     },
 
     unmount() {},

@@ -94,6 +94,7 @@ const MaterialsPage = {
                                 <td class="px-4 py-3">
                                     <div class="flex gap-1">
                                         <button class="btn btn-sm btn-outline" onclick="MaterialsPage.openEditModal(${item.id})">编辑</button>
+                                        <button class="btn btn-sm btn-outline" onclick="MaterialsPage.viewImages(${item.id})">📷 图片</button>
                                         <button class="btn btn-sm btn-danger" onclick="MaterialsPage.deleteItem(${item.id})">删除</button>
                                     </div>
                                 </td>
@@ -387,6 +388,29 @@ const MaterialsPage = {
         if (successCount > 0 && errors.length === 0) {
             this._importModal.close();
         }
+    },
+
+    viewImages(itemId) {
+        const itemName = this.activeTab === 'fibers'
+            ? (this.fibers.find(f => f.id === itemId)?.name || '')
+            : this.activeTab === 'sizing'
+            ? (this.sizingAgents.find(s => s.id === itemId)?.name || '')
+            : (this.fillers.find(f => f.id === itemId)?.name || '');
+
+        const options = {
+            title: `${itemName} - 图片管理`,
+            defaultCategory: 'raw_material',
+        };
+
+        if (this.activeTab === 'fibers') {
+            options.fiberSourceId = itemId;
+        } else if (this.activeTab === 'sizing') {
+            options.sizingAgentId = itemId;
+        } else {
+            options.mineralFillerId = itemId;
+        }
+
+        ImagesPage.openImageManager(options);
     },
 
     unmount() {},
