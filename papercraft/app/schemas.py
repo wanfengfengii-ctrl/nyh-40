@@ -277,10 +277,19 @@ class ExperimentSummary(BaseModel):
     date_range: Optional[dict]
 
 
-class ImportRecord(BaseModel):
-    batch_no: str
+class RawPulpComponent(BaseModel):
+    material_type: Optional[str] = None
+    fiber_source_id: Optional[int] = None
+    sizing_agent_id: Optional[int] = None
+    mineral_filler_id: Optional[int] = None
+    ratio: Optional[float] = None
     notes: Optional[str] = None
-    components: List[PulpComponentCreate] = []
+
+
+class ImportRecord(BaseModel):
+    batch_no: Optional[str] = None
+    notes: Optional[str] = None
+    components: List[RawPulpComponent] = []
 
 
 class ImportResult(BaseModel):

@@ -115,13 +115,12 @@ def experiment_summary(db: Session = Depends(get_db)):
     visible_batches = [b for b in all_batches if not b.hidden]
     sealed_batches = [b for b in all_batches if b.is_sealed]
     visible_ids = [b.id for b in visible_batches]
-    all_ids = [b.id for b in all_batches]
 
-    total_records = db.query(PapermakingRecord).filter(PapermakingRecord.batch_id.in_(all_ids)).count()
+    total_records = db.query(PapermakingRecord).filter(PapermakingRecord.batch_id.in_(visible_ids)).count()
     total_observations = (
         db.query(PaperObservation)
         .join(PapermakingRecord)
-        .filter(PapermakingRecord.batch_id.in_(all_ids))
+        .filter(PapermakingRecord.batch_id.in_(visible_ids))
         .count()
     )
 
