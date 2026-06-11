@@ -296,3 +296,139 @@ class ImportResult(BaseModel):
     imported: int
     skipped: int
     errors: List[str]
+
+
+class TemplateComponentCreate(BaseModel):
+    material_type: MaterialType
+    fiber_source_id: Optional[int] = None
+    sizing_agent_id: Optional[int] = None
+    mineral_filler_id: Optional[int] = None
+    ratio: float = Field(..., gt=0)
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_material_refs(self):
+        if self.material_type == MaterialType.fiber and self.fiber_source_id is None:
+            raise ValueError("纤维类型成分必须指定 fiber_source_id")
+        if self.material_type == MaterialType.sizing and self.sizing_agent_id is None:
+            raise ValueError("胶料类型成分必须指定 sizing_agent_id")
+        if self.material_type == MaterialType.filler and self.mineral_filler_id is None:
+            raise ValueError("填料类型成分必须指定 mineral_filler_id")
+        return self
+
+
+class TemplateComponentOut(BaseModel):
+    id: int
+    version_id: int
+    material_type: str
+    fiber_source_id: Optional[int]
+    sizing_agent_id: Optional[int]
+    mineral_filler_id: Optional[int]
+    ratio: float
+    notes: Optional[str]
+    material_name: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class TemplateVersionCreate(BaseModel):
+    version_name: Optional[str] = Field(None, max_length=100)
+    change_notes: Optional[str] = None
+    target_concentration: Optional[float] = Field(None, ge=0)
+    notes: Optional[str] = None
+    components: List[TemplateComponentCreate] = []
+
+
+class TemplateVersionOut(BaseModel):
+    id: int
+    template_id: int
+    version: int
+    version_name: Optional[str]
+    change_notes: Optional[str]
+    target_concentration: Optional[float]
+    notes: Optional[str]
+    created_at: datetime
+    components: List[TemplateComponentOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class ExperimentTemplateCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    initial_version: TemplateVersionCreate
+
+
+class ExperimentTemplateUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    category: Optional[str] = Field(None, max_length=50)
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ExperimentTemplateOut(BaseModel):
+    id: int
+    name: str
+    category: Optional[str]
+    description: Optional[str]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    latest_version: Optional[TemplateVersionOut] = None
+    replication_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class ExperimentTemplateDetailOut(BaseModel):
+    id: int
+    name: str
+    category: Optional[str]
+    description: Optional[str]
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    versions: List[TemplateVersionOut] = []
+    replication_count: int = 0
+
+    model_config = {"from_attributes": True}
+
+
+class TemplateReplicateBatch(BaseModel):
+    batch_no: str = Field(..., min_length=1, max_length=50)
+    version_id: Optional[int] = None
+    notes: Optional[str] = None
+    adjustment_notes: Optional[str] = None
+
+
+class TemplateReplicationOut(BaseModel):
+    id: int
+    template_id: int
+    version_id: int
+    batch_id: int
+    replication_type: str
+    adjustment_notes: Optional[str]
+    created_at: datetime
+    batch_no: Optional[str] = None
+    version_number: Optional[int] = None
+
+    model_config = {"from_attributes": True}
+
+
+class RecommendedScheme(BaseModel):
+    batch_id: int
+    batch_no: str
+    similarity_score: float
+    overall_rating: Optional[float]
+    avg_concentration: Optional[float]
+    components: List[PulpComponentOut] = []
+    recommendation_reasons: List[str] = []
+    adjustment_suggestions: List[str] = []
+
+
+class SchemeRecommendationRequest(BaseModel):
+    target_rating: Optional[int] = Field(None, ge=1, le=10)
+    target_concentration: Optional[float] = Field(None, ge=0)
+    fiber_preferences: Optional[List[int]] = None
+    top_k: int = Field(5, ge=1, le=20)
