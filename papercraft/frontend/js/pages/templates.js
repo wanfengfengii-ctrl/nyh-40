@@ -29,11 +29,13 @@ const TemplatesPage = {
             if (this.selectedStatus === 'active') params.is_active = true;
             if (this.selectedStatus === 'inactive') params.is_active = false;
             
-            [this.templates, this.categories, this.batches, this.fibers] = await Promise.all([
+            [this.templates, this.categories, this.batches, this.fibers, this.sizingAgents, this.fillers] = await Promise.all([
                 API.templates.list(params),
                 API.templates.listCategories(),
                 API.batches.list(),
                 API.fibers.list(),
+                API.sizingAgents.list(),
+                API.fillers.list(),
             ]);
         } catch (error) {
             showToast('加载数据失败: ' + error.message, 'error');
@@ -377,8 +379,8 @@ const TemplatesPage = {
             <div class="flex-1">
                 <label class="label">具体材料</label>
                 <select class="select" data-field="materialId" onchange="TemplatesPage.onMaterialChange(${rowIndex}, this.value)">
-                    ${this.getMaterialOptions('fiber')}
-                </select>
+                        ${this.getMaterialOptions('fiber', this.fibers[0]?.id || null)}
+                    </select>
             </div>
             <div class="w-24">
                 <label class="label">配比 *</label>
@@ -395,13 +397,13 @@ const TemplatesPage = {
         container.appendChild(row);
     },
 
-    getMaterialOptions(type) {
+    getMaterialOptions(type, selectedId) {
         if (type === 'fiber') {
-            return this.fibers.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+            return this.fibers.map(f => `<option value="${f.id}" ${f.id === selectedId ? 'selected' : ''}>${f.name}</option>`).join('');
         } else if (type === 'sizing') {
-            return (this.sizingAgents || []).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+            return (this.sizingAgents || []).map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${s.name}</option>`).join('');
         } else {
-            return (this.fillers || []).map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+            return (this.fillers || []).map(f => `<option value="${f.id}" ${f.id === selectedId ? 'selected' : ''}>${f.name}</option>`).join('');
         }
     },
 
@@ -411,20 +413,23 @@ const TemplatesPage = {
         const select = row.querySelector('[data-field="materialId"]');
         
         if (value === 'fiber') {
-            this._currentModal.components[index].fiber_source_id = this.fibers[0]?.id || null;
+            const selectedId = this.fibers[0]?.id || null;
+            this._currentModal.components[index].fiber_source_id = selectedId;
             this._currentModal.components[index].sizing_agent_id = null;
             this._currentModal.components[index].mineral_filler_id = null;
-            select.innerHTML = this.getMaterialOptions('fiber');
+            select.innerHTML = this.getMaterialOptions('fiber', selectedId);
         } else if (value === 'sizing') {
+            const selectedId = (this.sizingAgents || [])[0]?.id || null;
             this._currentModal.components[index].fiber_source_id = null;
-            this._currentModal.components[index].sizing_agent_id = (this.sizingAgents || [])[0]?.id || null;
+            this._currentModal.components[index].sizing_agent_id = selectedId;
             this._currentModal.components[index].mineral_filler_id = null;
-            select.innerHTML = this.getMaterialOptions('sizing');
+            select.innerHTML = this.getMaterialOptions('sizing', selectedId);
         } else {
+            const selectedId = (this.fillers || [])[0]?.id || null;
             this._currentModal.components[index].fiber_source_id = null;
             this._currentModal.components[index].sizing_agent_id = null;
-            this._currentModal.components[index].mineral_filler_id = (this.fillers || [])[0]?.id || null;
-            select.innerHTML = this.getMaterialOptions('filler');
+            this._currentModal.components[index].mineral_filler_id = selectedId;
+            select.innerHTML = this.getMaterialOptions('filler', selectedId);
         }
     },
 
@@ -666,6 +671,11 @@ const TemplatesPage = {
 
         components.forEach((comp, index) => {
             const componentId = Date.now() + index;
+            let selectedId = null;
+            if (comp.material_type === 'fiber') selectedId = comp.fiber_source_id;
+            else if (comp.material_type === 'sizing') selectedId = comp.sizing_agent_id;
+            else selectedId = comp.mineral_filler_id;
+            
             const row = document.createElement('div');
             row.className = 'flex gap-2 items-start p-3 bg-gray-50 rounded-lg';
             row.dataset.componentId = componentId;
@@ -681,7 +691,7 @@ const TemplatesPage = {
                 <div class="flex-1">
                     <label class="label">具体材料</label>
                     <select class="select" data-field="materialId" onchange="TemplatesPage.onMaterialChange(${index}, this.value)">
-                        ${this.getMaterialOptions(comp.material_type)}
+                        ${this.getMaterialOptions(comp.material_type, selectedId)}
                     </select>
                 </div>
                 <div class="w-24">

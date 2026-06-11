@@ -299,6 +299,7 @@ def create_template_from_batch(
     name: str = Query(..., min_length=1, max_length=200),
     category: Optional[str] = Query(None, max_length=50),
     description: Optional[str] = None,
+    version_name: Optional[str] = Query(None, max_length=200),
     db: Session = Depends(get_db),
 ):
     existing = db.query(ExperimentTemplate).filter(ExperimentTemplate.name == name).first()
@@ -325,10 +326,11 @@ def create_template_from_batch(
     db.add(template)
     db.flush()
 
+    final_version_name = version_name if version_name else f"源自 {batch.batch_no}"
     version = TemplateVersion(
         template_id=template.id,
         version=1,
-        version_name=f"源自 {batch.batch_no}",
+        version_name=final_version_name,
         change_notes=f"从批次 {batch.batch_no} 创建",
         target_concentration=avg_conc,
         notes=batch.notes,
