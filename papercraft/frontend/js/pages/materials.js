@@ -1,76 +1,83 @@
-const MaterialsPage = {
-    activeTab: 'fibers',
-    fibers: [],
-    sizingAgents: [],
-    fillers: [],
+class MaterialsPageImpl extends PageState {
+    constructor() {
+        super({
+            pageTitle: '🧪 材料管理',
+            initialState: {
+                activeTab: 'fibers',
+                fibers: [],
+                sizingAgents: [],
+                fillers: [],
+                _importModal: null,
+            },
+        });
+    }
 
-    async mount() {
-        App.setPageTitle('🧪 材料管理');
-        App.setPageActions(`
+    setPage() {
+        this.setActions(this._renderActions());
+        UIKit.setPage(this.pageTitle, this.pageActions, '');
+    }
+
+    _renderActions() {
+        return `
             <button class="btn btn-primary" onclick="MaterialsPage.openImportModal()">
                 📥 批量导入
             </button>
             <button class="btn btn-success" onclick="MaterialsPage.openCreateModal()">
                 ➕ 新增材料
             </button>
-        `);
-        loading(true);
-        await this.loadAllData();
-        this.render();
-    },
+        `;
+    }
 
-    async loadAllData() {
-        try {
-            [this.fibers, this.sizingAgents, this.fillers] = await Promise.all([
-                API.fibers.list(),
-                API.sizingAgents.list(),
-                API.fillers.list(),
-            ]);
-        } catch (error) {
-            showToast('加载数据失败: ' + error.message, 'error');
-        }
-    },
+    async loadData() {
+        [this._state.fibers, this._state.sizingAgents, this._state.fillers] = await NewAPI.materials.loadAll();
+    }
 
     render() {
+        const { activeTab, fibers, sizingAgents, fillers } = this._state;
+
         const tabs = [
-            { id: 'fibers', name: '纤维来源', icon: '🌾', count: this.fibers.length },
-            { id: 'sizing', name: '胶料', icon: '🧴', count: this.sizingAgents.length },
-            { id: 'fillers', name: '矿物填料', icon: '💎', count: this.fillers.length },
+            { id: 'fibers', name: '纤维来源', icon: '🌾', count: fibers.length },
+            { id: 'sizing', name: '胶料', icon: '🧴', count: sizingAgents.length },
+            { id: 'fillers', name: '矿物填料', icon: '💎', count: fillers.length },
         ];
 
-        App.setPageContent(`
+        const content = `
             <div class="mb-6 flex gap-2 border-b border-gray-200">
                 ${tabs.map(tab => `
                     <button 
-                        class="px-6 py-3 font-medium transition-colors relative ${this.activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}"
+                        class="px-6 py-3 font-medium transition-colors relative ${activeTab === tab.id ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500 hover:text-gray-700'}"
                         onclick="MaterialsPage.switchTab('${tab.id}')"
                     >
                         ${tab.icon} ${tab.name} <span class="text-xs text-gray-400">(${tab.count})</span>
                     </button>
                 `).join('')}
             </div>
-            ${this.renderTable()}
-        `);
-    },
+            ${this._renderTable()}
+        `;
 
-    renderTable() {
+        this.setContent(content);
+    }
+
+    _renderTable() {
+        const { activeTab, fibers, sizingAgents, fillers } = this._state;
+
         let data, columns, typeField;
-        if (this.activeTab === 'fibers') {
-            data = this.fibers;
+        if (activeTab === 'fibers') {
+            data = fibers;
             columns = ['名称', '纤维类型', '产地', '备注', '创建时间', '操作'];
             typeField = 'fiber_type';
-        } else if (this.activeTab === 'sizing') {
-            data = this.sizingAgents;
+        } else if (activeTab === 'sizing') {
+            data = sizingAgents;
             columns = ['名称', '胶料类型', '备注', '创建时间', '操作'];
             typeField = 'agent_type';
         } else {
-            data = this.fillers;
+            data = fillers;
             columns = ['名称', '填料类型', '备注', '创建时间', '操作'];
             typeField = 'filler_type';
         }
 
         if (data.length === 0) {
-            return emptyState('暂无数据，请点击右上角新增材料', '🧪');
+            return this.empty('暂无数据，请点击右上角新增材料', '🧪');
         }
 
         return `
@@ -88,9 +95,9 @@ const MaterialsPage = {
                                 <td class="px-4 py-3">
                                     <span class="badge badge-blue">${item[typeField]}</span>
                                 </td>
-                                ${this.activeTab === 'fibers' ? `<td class="px-4 py-3 text-gray-600">${item.origin || '-'}</td>` : ''}
+                                ${activeTab === 'fibers' ? `<td class="px-4 py-3 text-gray-600">${item.origin || '-'}</td>` : ''}
                                 <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${item.notes || ''}">${item.notes || '-'}</td>
-                                <td class="px-4 py-3 text-gray-500 text-sm">${formatDateTime(item.created_at)}</td>
+                                <td class="px-4 py-3 text-gray-500 text-sm">${UIKit.formatDateTime(item.created_at)}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex gap-1">
                                         <button class="btn btn-sm btn-outline" onclick="MaterialsPage.openEditModal(${item.id})">编辑</button>
@@ -104,180 +111,134 @@ const MaterialsPage = {
                 </table>
             </div>
         `;
-    },
+    }
 
     switchTab(tabId) {
-        this.activeTab = tabId;
+        this._state.activeTab = tabId;
         this.render();
-    },
+    }
 
-    getCurrentApi() {
-        if (this.activeTab === 'fibers') return API.fibers;
-        if (this.activeTab === 'sizing') return API.sizingAgents;
-        return API.fillers;
-    },
+    _getTabConfig() {
+        const { activeTab } = this._state;
+        const configs = {
+            fibers: {
+                typeLabel: '纤维来源',
+                typeField: 'fiber_type',
+                typeLabelText: '纤维类型',
+                api: NewAPI.fibers,
+            },
+            sizing: {
+                typeLabel: '胶料',
+                typeField: 'agent_type',
+                typeLabelText: '胶料类型',
+                api: NewAPI.sizingAgents,
+            },
+            fillers: {
+                typeLabel: '矿物填料',
+                typeField: 'filler_type',
+                typeLabelText: '填料类型',
+                api: NewAPI.fillers,
+            },
+        };
+        return configs[activeTab];
+    }
+
+    _getFields(config, isEdit = false) {
+        const fields = [
+            { name: 'name', key: 'name', label: '名称', type: 'text', placeholder: '请输入名称', required: true, gridCols: 2 },
+            { name: config.typeField, key: config.typeField, label: config.typeLabelText, type: 'text', placeholder: `请输入${config.typeLabelText}`, required: true, gridCols: 2 },
+        ];
+        if (this._state.activeTab === 'fibers') {
+            fields.push({ name: 'origin', key: 'origin', label: '产地', type: 'text', placeholder: '请输入产地', gridCols: 2 });
+        }
+        fields.push({ name: 'notes', key: 'notes', label: '备注', type: 'textarea', placeholder: '请输入备注', gridCols: 2 });
+        return fields;
+    }
+
+    _getRules(config) {
+        const rules = {
+            name: { required: true, label: '名称', maxLength: 100 },
+            [config.typeField]: { required: true, label: config.typeLabelText, maxLength: 50 },
+        };
+        if (this._state.activeTab === 'fibers') {
+            rules.origin = { maxLength: 200, label: '产地' };
+        }
+        return rules;
+    }
+
+    _findCurrentItem(id) {
+        const { activeTab, fibers, sizingAgents, fillers } = this._state;
+        if (activeTab === 'fibers') return fibers.find(f => f.id === id);
+        if (activeTab === 'sizing') return sizingAgents.find(s => s.id === id);
+        return fillers.find(f => f.id === id);
+    }
 
     openCreateModal() {
-        const typeLabels = {
-            fibers: '纤维来源',
-            sizing: '胶料',
-            filler: '矿物填料',
-        };
-        const typeLabel = typeLabels[this.activeTab];
-        const typeField = this.activeTab === 'fibers' ? 'fiber_type' : this.activeTab === 'sizing' ? 'agent_type' : 'filler_type';
-        const typeLabelText = this.activeTab === 'fibers' ? '纤维类型' : this.activeTab === 'sizing' ? '胶料类型' : '填料类型';
+        const config = this._getTabConfig();
+        const fields = this._getFields(config);
+        const rules = this._getRules(config);
 
-        const content = `
-            <form id="material-form" class="space-y-4">
-                <div>
-                    <label class="label">名称 *</label>
-                    <input type="text" name="name" class="input" placeholder="请输入名称" required>
-                </div>
-                <div>
-                    <label class="label">${typeLabelText} *</label>
-                    <input type="text" name="${typeField}" class="input" placeholder="请输入${typeLabelText}" required>
-                </div>
-                ${this.activeTab === 'fibers' ? `
-                <div>
-                    <label class="label">产地</label>
-                    <input type="text" name="origin" class="input" placeholder="请输入产地">
-                </div>
-                ` : ''}
-                <div>
-                    <label class="label">备注</label>
-                    <textarea name="notes" class="textarea" placeholder="请输入备注"></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-4">
-                    <button type="button" class="btn btn-outline modal-close-btn">取消</button>
-                    <button type="submit" class="btn btn-primary">保存</button>
-                </div>
-            </form>
-        `;
-
-        const { modal, close } = showModal(content, { title: `新增${typeLabel}`, width: '500px' });
-
-        modal.querySelector('.modal-close-btn').addEventListener('click', close);
-        modal.querySelector('#material-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-            const typeFieldName = this.activeTab === 'fibers' ? 'fiber_type' : this.activeTab === 'sizing' ? 'agent_type' : 'filler_type';
-            data[typeFieldName] = formData.get(typeFieldName);
-
-            const rules = {
-                name: { required: true, label: '名称', maxLength: 100 },
-                [typeFieldName]: { required: true, label: typeLabelText, maxLength: 50 },
-            };
-            if (this.activeTab === 'fibers') {
-                rules.origin = { maxLength: 200, label: '产地' };
-            }
-
-            const errors = validateForm(formData, rules);
-            if (errors.length > 0) {
-                showToast(errors[0], 'error');
-                return;
-            }
-
-            try {
-                await this.getCurrentApi().create(data);
-                showToast(`${typeLabel}创建成功`, 'success');
-                close();
-                await this.loadAllData();
-                this.render();
-            } catch (error) {
-                showToast('创建失败: ' + error.message, 'error');
-            }
+        FormManager.createCreate({
+            title: `新增${config.typeLabel}`,
+            width: '500px',
+            submitText: '保存',
+            fields,
+            rules,
+            api: config.api,
+            apiMethod: config.api.create,
+            successMsg: `${config.typeLabel}创建成功`,
+            errorMsg: '创建失败',
+            onSuccess: async () => {
+                await this._refreshData();
+            },
         });
-    },
+    }
 
     openEditModal(id) {
-        const typeLabels = {
-            fibers: '纤维来源',
-            sizing: '胶料',
-            filler: '矿物填料',
-        };
-        const typeLabel = typeLabels[this.activeTab];
-        const typeField = this.activeTab === 'fibers' ? 'fiber_type' : this.activeTab === 'sizing' ? 'agent_type' : 'filler_type';
-        const typeLabelText = this.activeTab === 'fibers' ? '纤维类型' : this.activeTab === 'sizing' ? '胶料类型' : '填料类型';
+        const config = this._getTabConfig();
+        const fields = this._getFields(config, true);
+        const rules = this._getRules(config);
+        const existingData = this._findCurrentItem(id);
+        if (!existingData) return;
 
-        const currentData = this.activeTab === 'fibers'
-            ? this.fibers.find(f => f.id === id)
-            : this.activeTab === 'sizing'
-            ? this.sizingAgents.find(s => s.id === id)
-            : this.fillers.find(f => f.id === id);
-
-        if (!currentData) return;
-
-        const content = `
-            <form id="material-form" class="space-y-4">
-                <div>
-                    <label class="label">名称 *</label>
-                    <input type="text" name="name" class="input" value="${currentData.name}" required>
-                </div>
-                <div>
-                    <label class="label">${typeLabelText} *</label>
-                    <input type="text" name="${typeField}" class="input" value="${currentData[typeField]}" required>
-                </div>
-                ${this.activeTab === 'fibers' ? `
-                <div>
-                    <label class="label">产地</label>
-                    <input type="text" name="origin" class="input" value="${currentData.origin || ''}">
-                </div>
-                ` : ''}
-                <div>
-                    <label class="label">备注</label>
-                    <textarea name="notes" class="textarea">${currentData.notes || ''}</textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-4">
-                    <button type="button" class="btn btn-outline modal-close-btn">取消</button>
-                    <button type="submit" class="btn btn-primary">保存</button>
-                </div>
-            </form>
-        `;
-
-        const { modal, close } = showModal(content, { title: `编辑${typeLabel}`, width: '500px' });
-
-        modal.querySelector('.modal-close-btn').addEventListener('click', close);
-        modal.querySelector('#material-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
-
-            try {
-                await this.getCurrentApi().update(id, data);
-                showToast(`${typeLabel}更新成功`, 'success');
-                close();
-                await this.loadAllData();
-                this.render();
-            } catch (error) {
-                showToast('更新失败: ' + error.message, 'error');
-            }
-        });
-    },
-
-    deleteItem(id) {
-        const typeLabels = {
-            fibers: '纤维来源',
-            sizing: '胶料',
-            filler: '矿物填料',
-        };
-        const typeLabel = typeLabels[this.activeTab];
-
-        showConfirmModal(
-            `确定要删除该${typeLabel}吗？此操作不可恢复。`,
-            async () => {
-                try {
-                    await this.getCurrentApi().delete(id);
-                    showToast(`${typeLabel}删除成功`, 'success');
-                    await this.loadAllData();
-                    this.render();
-                } catch (error) {
-                    showToast('删除失败: ' + error.message, 'error');
-                }
+        FormManager.createEdit(
+            {
+                title: `编辑${config.typeLabel}`,
+                width: '500px',
+                submitText: '保存',
+                fields,
+                rules,
+                api: config.api,
+                apiMethod: config.api.update,
+                successMsg: `${config.typeLabel}更新成功`,
+                errorMsg: '更新失败',
+                onSuccess: async () => {
+                    await this._refreshData();
+                },
             },
-            { title: `删除${typeLabel}`, confirmText: '确认删除' }
+            id,
+            existingData
         );
-    },
+    }
+
+    async deleteItem(id) {
+        const config = this._getTabConfig();
+        const doDelete = async () => {
+            try {
+                await this.safeCall(config.api.delete(id), {
+                    successMsg: `${config.typeLabel}删除成功`,
+                    errorMsg: '删除失败',
+                });
+                await this._refreshData();
+            } catch (_) {}
+        };
+
+        UIKit.confirm(
+            `确定要删除该${config.typeLabel}吗？此操作不可恢复。`,
+            doDelete,
+            { title: `删除${config.typeLabel}`, confirmText: '确认删除', type: 'danger' }
+        );
+    }
 
     openImportModal() {
         const content = `
@@ -309,14 +270,15 @@ const MaterialsPage = {
             </div>
         `;
 
-        const { modal, close } = showModal(content, { title: '📥 批量导入材料', width: '600px' });
+        const { modal, close } = UIKit.modal(content, { title: '📥 批量导入材料', width: '600px' });
         modal.querySelector('.modal-close-btn').addEventListener('click', close);
-        this._importModal = { modal, close };
-    },
+        this._state._importModal = { modal, close };
+    }
 
     async doImport() {
-        const textarea = this._importModal.modal.querySelector('#import-data');
-        const errorDiv = this._importModal.modal.querySelector('#import-errors');
+        const { modal, close } = this._state._importModal;
+        const textarea = modal.querySelector('#import-data');
+        const errorDiv = modal.querySelector('#import-errors');
         const raw = textarea.value.trim();
 
         if (!raw) {
@@ -363,9 +325,9 @@ const MaterialsPage = {
             for (let i = 0; i < items.length; i++) {
                 if (validateItem(items[i], type, i)) {
                     try {
-                        if (type === 'fibers') await API.fibers.create(items[i]);
-                        else if (type === 'sizingAgents') await API.sizingAgents.create(items[i]);
-                        else await API.fillers.create(items[i]);
+                        if (type === 'fibers') await NewAPI.fibers.create(items[i]);
+                        else if (type === 'sizingAgents') await NewAPI.sizingAgents.create(items[i]);
+                        else await NewAPI.fillers.create(items[i]);
                         successCount++;
                     } catch (e) {
                         errors.push(`[${type} 第${i + 1}条] ${e.message}`);
@@ -380,38 +342,49 @@ const MaterialsPage = {
         }
 
         if (successCount > 0) {
-            showToast(`成功导入 ${successCount} 条材料`, 'success');
-            await this.loadAllData();
-            this.render();
+            UIKit.toast(`成功导入 ${successCount} 条材料`, 'success');
+            await this._refreshData();
         }
 
         if (successCount > 0 && errors.length === 0) {
-            this._importModal.close();
+            close();
         }
-    },
+    }
 
     viewImages(itemId) {
-        const itemName = this.activeTab === 'fibers'
-            ? (this.fibers.find(f => f.id === itemId)?.name || '')
-            : this.activeTab === 'sizing'
-            ? (this.sizingAgents.find(s => s.id === itemId)?.name || '')
-            : (this.fillers.find(f => f.id === itemId)?.name || '');
+        const { activeTab, fibers, sizingAgents, fillers } = this._state;
+
+        const itemName = activeTab === 'fibers'
+            ? (fibers.find(f => f.id === itemId)?.name || '')
+            : activeTab === 'sizing'
+            ? (sizingAgents.find(s => s.id === itemId)?.name || '')
+            : (fillers.find(f => f.id === itemId)?.name || '');
 
         const options = {
             title: `${itemName} - 图片管理`,
             defaultCategory: 'raw_material',
         };
 
-        if (this.activeTab === 'fibers') {
+        if (activeTab === 'fibers') {
             options.fiberSourceId = itemId;
-        } else if (this.activeTab === 'sizing') {
+        } else if (activeTab === 'sizing') {
             options.sizingAgentId = itemId;
         } else {
             options.mineralFillerId = itemId;
         }
 
         ImagesPage.openImageManager(options);
-    },
+    }
 
-    unmount() {},
-};
+    async _refreshData() {
+        try {
+            await this.loadData();
+            this.setActions(this._renderActions());
+            this.render();
+        } catch (error) {
+            this.handleError(error, '刷新数据失败');
+        }
+    }
+}
+
+window.MaterialsPage = new MaterialsPageImpl();

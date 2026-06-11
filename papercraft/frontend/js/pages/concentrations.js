@@ -1,42 +1,62 @@
-const ConcentrationsPage = {
-    batches: [],
-    selectedBatchId: null,
-    concentrations: [],
-    chart: null,
+class ConcentrationsPageImpl extends PageState {
+    constructor() {
+        super({
+            pageTitle: '🧫 槽液浓度记录',
+            initialState: {
+                batches: [],
+                selectedBatchId: null,
+                concentrations: [],
+            },
+        });
+        this.chart = null;
+    }
 
     async mount() {
-        App.setPageTitle('🧫 槽液浓度记录');
-        App.setPageActions(`
-            <button class="btn btn-success" onclick="ConcentrationsPage.openAddModal()" ${!this.selectedBatchId ? 'disabled' : ''}>
+        this.setPage();
+        UIKit.loading(true);
+        try {
+            await this.loadData();
+        } catch (error) {
+            this.handleError(error, '加载数据失败');
+        } finally {
+            UIKit.loading(false);
+        }
+        this.render();
+    }
+
+    setPage() {
+        this.setActions(this._renderActions());
+        UIKit.setPage(this.pageTitle, this.pageActions, '');
+    }
+
+    _renderActions() {
+        const { selectedBatchId } = this._state;
+        return `
+            <button class="btn btn-success" onclick="ConcentrationsPage.openAddModal()" ${!selectedBatchId ? 'disabled' : ''}>
                 ➕ 新增记录
             </button>
-        `);
-        loading(true);
-        await this.loadData();
-        this.render();
-    },
+        `;
+    }
 
     async loadData() {
-        try {
-            this.batches = await API.batches.list();
-            if (this.batches.length > 0 && !this.selectedBatchId) {
-                this.selectedBatchId = this.batches[0].id;
-            }
-            if (this.selectedBatchId) {
-                this.concentrations = await API.batches.getConcentrations(this.selectedBatchId);
-            }
-        } catch (error) {
-            showToast('加载数据失败: ' + error.message, 'error');
+        this._state.batches = await NewAPI.batches.list();
+        if (this._state.batches.length > 0 && !this._state.selectedBatchId) {
+            this._state.selectedBatchId = this._state.batches[0].id;
         }
-    },
+        if (this._state.selectedBatchId) {
+            this._state.concentrations = await NewAPI.batches.getConcentrations(this._state.selectedBatchId);
+        }
+    }
 
     getSelectedBatch() {
-        return this.batches.find(b => b.id === this.selectedBatchId);
-    },
+        const { batches, selectedBatchId } = this._state;
+        return batches.find(b => b.id === selectedBatchId);
+    }
 
     render() {
-        if (this.batches.length === 0) {
-            App.setPageContent(emptyState('暂无批次数据，请先在批次管理中创建批次', '📦'));
+        const { batches } = this._state;
+        if (batches.length === 0) {
+            this.setContent(UIKit.emptyState('暂无批次数据，请先在批次管理中创建批次', '📦'));
             return;
         }
 
@@ -48,13 +68,13 @@ const ConcentrationsPage = {
                </div>`
             : '';
 
-        const batchOptions = this.batches.map(batch => `
-            <option value="${batch.id}" ${batch.id === this.selectedBatchId ? 'selected' : ''}>
+        const batchOptions = batches.map(batch => `
+            <option value="${batch.id}" ${batch.id === this._state.selectedBatchId ? 'selected' : ''}>
                 ${batch.batch_no} ${batch.is_sealed ? '(已封存)' : ''}
             </option>
         `).join('');
 
-        App.setPageContent(`
+        const content = `
             <div class="mb-6 flex gap-4 items-center">
                 <div class="flex-1">
                     <label class="label">选择批次</label>
@@ -65,7 +85,7 @@ const ConcentrationsPage = {
                 ${selectedBatch ? `
                 <div class="flex-1">
                     <label class="label">批次状态</label>
-                    <div class="pt-2">${getStatusBadge(selectedBatch.is_sealed, selectedBatch.hidden)}</div>
+                    <div class="pt-2">${UIKit.getStatusBadge(selectedBatch.is_sealed, selectedBatch.hidden)}</div>
                 </div>
                 ` : ''}
             </div>
@@ -85,17 +105,19 @@ const ConcentrationsPage = {
                     ${this.renderTable()}
                 </div>
             </div>
-        `);
+        `;
 
+        this.setContent(content);
         this.renderChart();
-    },
+    }
 
     renderTable() {
-        if (this.concentrations.length === 0) {
-            return emptyState('暂无浓度记录，请点击右上角新增记录', '🧫');
+        const { concentrations } = this._state;
+        if (concentrations.length === 0) {
+            return UIKit.emptyState('暂无浓度记录，请点击右上角新增记录', '🧫');
         }
 
-        const sortedConcentrations = [...this.concentrations].sort((a, b) => 
+        const sortedConcentrations = [...concentrations].sort((a, b) =>
             new Date(b.measured_at) - new Date(a.measured_at)
         );
 
@@ -111,7 +133,7 @@ const ConcentrationsPage = {
                 <tbody>
                     ${sortedConcentrations.map(conc => `
                         <tr class="border-b border-gray-100">
-                            <td class="px-4 py-3 text-gray-600 text-sm">${formatDateTime(conc.measured_at)}</td>
+                            <td class="px-4 py-3 text-gray-600 text-sm">${UIKit.formatDateTime(conc.measured_at)}</td>
                             <td class="px-4 py-3 font-medium text-gray-800">${conc.value}</td>
                             <td class="px-4 py-3 text-gray-600 max-w-xs truncate" title="${conc.notes || ''}">${conc.notes || '-'}</td>
                         </tr>
@@ -119,7 +141,7 @@ const ConcentrationsPage = {
                 </tbody>
             </table>
         `;
-    },
+    }
 
     renderChart() {
         const canvas = document.getElementById('concentration-chart');
@@ -131,11 +153,11 @@ const ConcentrationsPage = {
             this.chart.destroy();
         }
 
-        const sortedData = [...this.concentrations].sort((a, b) => 
+        const sortedData = [...this._state.concentrations].sort((a, b) =>
             new Date(a.measured_at) - new Date(b.measured_at)
         );
 
-        const labels = sortedData.map(conc => formatDateTime(conc.measured_at));
+        const labels = sortedData.map(conc => UIKit.formatDateTime(conc.measured_at));
         const values = sortedData.map(conc => conc.value);
 
         this.chart = new Chart(ctx, {
@@ -192,99 +214,91 @@ const ConcentrationsPage = {
                 }
             }
         });
-    },
+    }
 
     async onBatchChange(batchId) {
-        this.selectedBatchId = parseInt(batchId);
-        loading(true);
+        this._state.selectedBatchId = parseInt(batchId);
+        UIKit.loading(true);
         try {
-            this.concentrations = await API.batches.getConcentrations(this.selectedBatchId);
+            this._state.concentrations = await NewAPI.batches.getConcentrations(this._state.selectedBatchId);
+            this.setActions(this._renderActions());
             this.render();
         } catch (error) {
-            showToast('加载浓度记录失败: ' + error.message, 'error');
-            loading(false);
+            this.handleError(error, '加载浓度记录失败');
+        } finally {
+            UIKit.loading(false);
         }
-    },
+    }
 
     openAddModal() {
-        if (!this.selectedBatchId) {
-            showToast('请先选择一个批次', 'warning');
+        const { selectedBatchId } = this._state;
+        if (!selectedBatchId) {
+            UIKit.toast('请先选择一个批次', 'warning');
             return;
         }
 
         const selectedBatch = this.getSelectedBatch();
-        const sealedNotice = selectedBatch?.is_sealed 
+        const sealedNotice = selectedBatch?.is_sealed
             ? `<div class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
                  ⚠️ 该批次已封存，但仍可添加浓度记录
                </div>`
             : '';
 
-        const content = `
-            <form id="concentration-form" class="space-y-4">
-                ${sealedNotice}
-                <div>
-                    <label class="label">浓度值 *</label>
-                    <input type="number" name="value" class="input" step="0.01" min="0" placeholder="请输入浓度值" required>
-                </div>
-                <div>
-                    <label class="label">测量时间</label>
-                    <input type="datetime-local" name="measured_at" class="input">
-                    <p class="text-xs text-gray-500 mt-1">不填则默认为当前时间</p>
-                </div>
-                <div>
-                    <label class="label">备注</label>
-                    <textarea name="notes" class="textarea" placeholder="请输入备注"></textarea>
-                </div>
-                <div class="flex justify-end gap-2 pt-4">
-                    <button type="button" class="btn btn-outline modal-close-btn">取消</button>
-                    <button type="submit" class="btn btn-primary">保存</button>
-                </div>
-            </form>
-        `;
+        const fields = [
+            { name: 'value', key: 'value', label: '浓度值 *', type: 'number', step: 0.01, min: 0, placeholder: '请输入浓度值', required: true },
+            { name: 'measured_at', key: 'measured_at', label: '测量时间', type: 'datetime-local', placeholder: '不填则默认为当前时间' },
+            { name: 'notes', key: 'notes', label: '备注', type: 'textarea', placeholder: '请输入备注', rows: 3 },
+        ];
 
-        const { modal, close } = showModal(content, { title: '新增浓度记录', width: '500px' });
-
-        modal.querySelector('.modal-close-btn').addEventListener('click', close);
-        modal.querySelector('#concentration-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const formData = new FormData(e.target);
-            
-            const rules = {
+        FormManager.open({
+            title: '新增浓度记录',
+            width: '500px',
+            submitText: '保存',
+            extraContent: {
+                beforeFields: sealedNotice,
+            },
+            fields,
+            rules: {
                 value: { required: true, label: '浓度值', min: 0 },
-            };
+            },
+            onSubmit: async (data, { close }) => {
+                const submitData = {
+                    value: parseFloat(data.value),
+                    notes: data.notes || null,
+                };
 
-            const errors = validateForm(formData, rules);
-            if (errors.length > 0) {
-                showToast(errors[0], 'error');
-                return;
-            }
+                if (data.measured_at) {
+                    submitData.measured_at = new Date(data.measured_at).toISOString();
+                }
 
-            const data = {
-                value: parseFloat(formData.get('value')),
-                notes: formData.get('notes') || null,
-            };
-
-            const measuredAt = formData.get('measured_at');
-            if (measuredAt) {
-                data.measured_at = new Date(measuredAt).toISOString();
-            }
-
-            try {
-                await API.batches.addConcentration(this.selectedBatchId, data);
-                showToast('浓度记录添加成功', 'success');
+                await this.safeCall(NewAPI.batches.addConcentration(selectedBatchId, submitData), {
+                    successMsg: '浓度记录添加成功',
+                    errorMsg: '添加失败',
+                });
                 close();
-                this.concentrations = await API.batches.getConcentrations(this.selectedBatchId);
-                this.render();
-            } catch (error) {
-                showToast('添加失败: ' + error.message, 'error');
-            }
+                await this._refreshConcentrations();
+            },
         });
-    },
+    }
+
+    async _refreshConcentrations() {
+        const { selectedBatchId } = this._state;
+        if (!selectedBatchId) return;
+        try {
+            this._state.concentrations = await NewAPI.batches.getConcentrations(selectedBatchId);
+        } catch (error) {
+            this.handleError(error, '加载浓度记录失败');
+        }
+        this.render();
+    }
 
     unmount() {
         if (this.chart) {
             this.chart.destroy();
             this.chart = null;
         }
-    },
-};
+        super.unmount();
+    }
+}
+
+window.ConcentrationsPage = new ConcentrationsPageImpl();

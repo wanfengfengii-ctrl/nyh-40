@@ -1,13 +1,4 @@
-const CATEGORY_MAP = {
-    raw_material: { name: '原料', icon: '🌾', color: 'bg-green-100 text-green-800' },
-    wet_paper: { name: '湿纸页', icon: '💧', color: 'bg-blue-100 text-blue-800' },
-    dry_paper: { name: '成纸', icon: '📄', color: 'bg-amber-100 text-amber-800' },
-    microscopy: { name: '显微结构', icon: '🔬', color: 'bg-purple-100 text-purple-800' },
-};
 
-function getCategoryInfo(category) {
-    return CATEGORY_MAP[category] || { name: category, icon: '📷', color: 'bg-gray-100 text-gray-800' };
-}
 
 const ImagesPage = {
     images: [],
