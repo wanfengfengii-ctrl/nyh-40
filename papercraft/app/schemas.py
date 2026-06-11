@@ -1,0 +1,289 @@
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing import Optional, List
+from datetime import date, datetime
+from enum import Enum
+
+
+class MaterialType(str, Enum):
+    fiber = "fiber"
+    sizing = "sizing"
+    filler = "filler"
+
+
+class FiberSourceCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    fiber_type: str = Field(..., min_length=1, max_length=50)
+    origin: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = None
+
+
+class FiberSourceUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    fiber_type: Optional[str] = Field(None, min_length=1, max_length=50)
+    origin: Optional[str] = Field(None, max_length=200)
+    notes: Optional[str] = None
+
+
+class FiberSourceOut(BaseModel):
+    id: int
+    name: str
+    fiber_type: str
+    origin: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class SizingAgentCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    agent_type: str = Field(..., min_length=1, max_length=50)
+    notes: Optional[str] = None
+
+
+class SizingAgentUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    agent_type: Optional[str] = Field(None, min_length=1, max_length=50)
+    notes: Optional[str] = None
+
+
+class SizingAgentOut(BaseModel):
+    id: int
+    name: str
+    agent_type: str
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MineralFillerCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    filler_type: str = Field(..., min_length=1, max_length=50)
+    notes: Optional[str] = None
+
+
+class MineralFillerUpdate(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    filler_type: Optional[str] = Field(None, min_length=1, max_length=50)
+    notes: Optional[str] = None
+
+
+class MineralFillerOut(BaseModel):
+    id: int
+    name: str
+    filler_type: str
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PulpComponentCreate(BaseModel):
+    material_type: MaterialType
+    fiber_source_id: Optional[int] = None
+    sizing_agent_id: Optional[int] = None
+    mineral_filler_id: Optional[int] = None
+    ratio: float = Field(..., gt=0)
+    notes: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_material_refs(self):
+        if self.material_type == MaterialType.fiber and self.fiber_source_id is None:
+            raise ValueError("纤维类型成分必须指定 fiber_source_id")
+        if self.material_type == MaterialType.sizing and self.sizing_agent_id is None:
+            raise ValueError("胶料类型成分必须指定 sizing_agent_id")
+        if self.material_type == MaterialType.filler and self.mineral_filler_id is None:
+            raise ValueError("填料类型成分必须指定 mineral_filler_id")
+        return self
+
+
+class PulpComponentOut(BaseModel):
+    id: int
+    batch_id: int
+    material_type: str
+    fiber_source_id: Optional[int]
+    sizing_agent_id: Optional[int]
+    mineral_filler_id: Optional[int]
+    ratio: float
+    notes: Optional[str]
+
+    model_config = {"from_attributes": True}
+
+
+class PulpBatchCreate(BaseModel):
+    batch_no: str = Field(..., min_length=1, max_length=50)
+    notes: Optional[str] = None
+    components: List[PulpComponentCreate] = []
+
+
+class PulpBatchUpdate(BaseModel):
+    batch_no: Optional[str] = Field(None, min_length=1, max_length=50)
+    is_sealed: Optional[bool] = None
+    hidden: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class PulpBatchOut(BaseModel):
+    id: int
+    batch_no: str
+    is_sealed: bool
+    hidden: bool
+    notes: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+    components: List[PulpComponentOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class VatConcentrationCreate(BaseModel):
+    concentration: float = Field(..., ge=0)
+    notes: Optional[str] = None
+
+    @field_validator("concentration")
+    @classmethod
+    def concentration_not_negative(cls, v):
+        if v < 0:
+            raise ValueError("槽液浓度不能为负数")
+        return v
+
+
+class VatConcentrationOut(BaseModel):
+    id: int
+    batch_id: int
+    concentration: float
+    measured_at: datetime
+    notes: Optional[str]
+
+    model_config = {"from_attributes": True}
+
+
+class PapermakingRecordCreate(BaseModel):
+    paper_date: date
+    operator: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
+
+    @field_validator("paper_date")
+    @classmethod
+    def paper_date_not_future(cls, v):
+        if v > date.today():
+            raise ValueError("抄纸日期不能晚于当前日期")
+        return v
+
+
+class PapermakingRecordUpdate(BaseModel):
+    paper_date: Optional[date] = None
+    operator: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = None
+
+    @field_validator("paper_date")
+    @classmethod
+    def paper_date_not_future(cls, v):
+        if v is not None and v > date.today():
+            raise ValueError("抄纸日期不能晚于当前日期")
+        return v
+
+
+class PapermakingRecordOut(BaseModel):
+    id: int
+    batch_id: int
+    paper_date: date
+    operator: Optional[str]
+    notes: Optional[str]
+    created_at: datetime
+    observations: List["PaperObservationOut"] = []
+
+    model_config = {"from_attributes": True}
+
+
+class PaperObservationCreate(BaseModel):
+    thickness: Optional[float] = Field(None, ge=0)
+    tensile_strength: Optional[float] = Field(None, ge=0)
+    absorbency: Optional[float] = Field(None, ge=0)
+    color: Optional[str] = Field(None, max_length=50)
+    texture: Optional[str] = Field(None, max_length=50)
+    overall_rating: Optional[int] = Field(None, ge=1, le=10)
+    notes: Optional[str] = None
+
+
+class PaperObservationUpdate(BaseModel):
+    thickness: Optional[float] = Field(None, ge=0)
+    tensile_strength: Optional[float] = Field(None, ge=0)
+    absorbency: Optional[float] = Field(None, ge=0)
+    color: Optional[str] = Field(None, max_length=50)
+    texture: Optional[str] = Field(None, max_length=50)
+    overall_rating: Optional[int] = Field(None, ge=1, le=10)
+    notes: Optional[str] = None
+
+
+class PaperObservationOut(BaseModel):
+    id: int
+    record_id: int
+    thickness: Optional[float]
+    tensile_strength: Optional[float]
+    absorbency: Optional[float]
+    color: Optional[str]
+    texture: Optional[str]
+    overall_rating: Optional[int]
+    notes: Optional[str]
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+PapermakingRecordOut.model_rebuild()
+
+
+class BatchDeleteConfirm(BaseModel):
+    confirmed: bool = Field(..., description="确认删除：已有成纸观察的批次需二次确认")
+
+
+class BatchComparison(BaseModel):
+    batch_ids: List[int] = Field(..., min_length=2)
+
+
+class BatchTraceOut(BaseModel):
+    batch: PulpBatchOut
+    concentrations: List[VatConcentrationOut]
+    papermaking_records: List[PapermakingRecordOut]
+
+
+class MaterialProportionItem(BaseModel):
+    material_type: str
+    material_id: int
+    material_name: str
+    total_ratio: float
+    ratio_percentage: float
+
+
+class MaterialProportionStat(BaseModel):
+    batch_count: int
+    total_ratio_sum: float
+    items: List[MaterialProportionItem]
+
+
+class ExperimentSummary(BaseModel):
+    total_batches: int
+    visible_batches: int
+    sealed_batches: int
+    total_papermaking_records: int
+    total_observations: int
+    avg_overall_rating: Optional[float]
+    fiber_distribution: dict
+    sizing_distribution: dict
+    filler_distribution: dict
+    concentration_stats: dict
+    date_range: Optional[dict]
+
+
+class ImportRecord(BaseModel):
+    batch_no: str
+    notes: Optional[str] = None
+    components: List[PulpComponentCreate] = []
+
+
+class ImportResult(BaseModel):
+    imported: int
+    skipped: int
+    errors: List[str]
