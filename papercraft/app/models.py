@@ -1,5 +1,6 @@
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, Date, DateTime, Text, ForeignKey, UniqueConstraint,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 from datetime import datetime
@@ -57,6 +58,7 @@ class PulpBatch(Base):
     components = relationship("PulpComponent", back_populates="batch", cascade="all, delete-orphan")
     concentrations = relationship("VatConcentration", back_populates="batch", cascade="all, delete-orphan")
     papermaking_records = relationship("PapermakingRecord", back_populates="batch", cascade="all, delete-orphan")
+    images = relationship("ExperimentImage", back_populates="batch", cascade="all, delete-orphan")
 
 
 class PulpComponent(Base):
@@ -101,6 +103,7 @@ class PapermakingRecord(Base):
 
     batch = relationship("PulpBatch", back_populates="papermaking_records")
     observations = relationship("PaperObservation", back_populates="record", cascade="all, delete-orphan")
+    images = relationship("ExperimentImage", back_populates="record", cascade="all, delete-orphan")
 
 
 class PaperObservation(Base):
@@ -118,6 +121,7 @@ class PaperObservation(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     record = relationship("PapermakingRecord", back_populates="observations")
+    images = relationship("ExperimentImage", back_populates="observation", cascade="all, delete-orphan")
 
 
 class ExperimentTemplate(Base):
@@ -189,3 +193,66 @@ class TemplateReplication(Base):
     template = relationship("ExperimentTemplate", back_populates="replications")
     version = relationship("TemplateVersion")
     batch = relationship("PulpBatch")
+
+
+class ImageCategory(str):
+    RAW_MATERIAL = "raw_material"
+    WET_PAPER = "wet_paper"
+    DRY_PAPER = "dry_paper"
+    MICROSCOPY = "microscopy"
+
+
+class ExperimentImage(Base):
+    __tablename__ = "experiment_images"
+
+    id = Column(Integer, primary_key=True, index=True)
+    file_path = Column(String(500), nullable=False)
+    file_name = Column(String(200), nullable=False)
+    file_size = Column(Integer, nullable=True)
+    mime_type = Column(String(100), nullable=True)
+    category = Column(String(50), nullable=False, index=True)
+    title = Column(String(200), nullable=True)
+    description = Column(Text, nullable=True)
+    is_hidden = Column(Boolean, default=False, index=True)
+    is_typical = Column(Boolean, default=False, index=True)
+    sort_order = Column(Integer, default=0)
+
+    fiber_source_id = Column(Integer, ForeignKey("fiber_sources.id"), nullable=True, index=True)
+    sizing_agent_id = Column(Integer, ForeignKey("sizing_agents.id"), nullable=True, index=True)
+    mineral_filler_id = Column(Integer, ForeignKey("mineral_fillers.id"), nullable=True, index=True)
+    batch_id = Column(Integer, ForeignKey("pulp_batches.id"), nullable=True, index=True)
+    record_id = Column(Integer, ForeignKey("papermaking_records.id"), nullable=True, index=True)
+    observation_id = Column(Integer, ForeignKey("paper_observations.id"), nullable=True, index=True)
+
+    captured_at = Column(DateTime, nullable=True)
+    captured_by = Column(String(100), nullable=True)
+    microscope_settings = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    fiber_source = relationship("FiberSource")
+    sizing_agent = relationship("SizingAgent")
+    mineral_filler = relationship("MineralFiller")
+    batch = relationship("PulpBatch", back_populates="images")
+    record = relationship("PapermakingRecord", back_populates="images")
+    observation = relationship("PaperObservation", back_populates="images")
+    annotations = relationship("ImageAnnotation", back_populates="image", cascade="all, delete-orphan")
+
+
+class ImageAnnotation(Base):
+    __tablename__ = "image_annotations"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_id = Column(Integer, ForeignKey("experiment_images.id"), nullable=False, index=True)
+    label = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    region_type = Column(String(50), nullable=True)
+    region_data = Column(JSON, nullable=True)
+    color = Column(String(20), nullable=True)
+    sort_order = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    image = relationship("ExperimentImage", back_populates="annotations")

@@ -6,11 +6,54 @@ from app.database import get_db
 from app.models import (
     PulpBatch, PulpComponent, FiberSource, SizingAgent, MineralFiller,
     VatConcentration, PapermakingRecord, PaperObservation,
+    ExperimentImage,
 )
 from app.schemas import (
     BatchComparison, BatchTraceOut, MaterialProportionItem,
     MaterialProportionStat, ExperimentSummary,
+    ExperimentImageSummary, TypicalImageSummary, ExperimentImageWithUrl,
 )
+
+CATEGORY_NAMES = {
+    "raw_material": "原料",
+    "wet_paper": "湿纸页",
+    "dry_paper": "成纸",
+    "microscopy": "显微结构",
+}
+
+
+def _get_image_url(image_id: int) -> str:
+    return f"/images/{image_id}/file"
+
+
+def _to_image_with_url(image: ExperimentImage) -> ExperimentImageWithUrl:
+    return ExperimentImageWithUrl(
+        id=image.id,
+        file_path=image.file_path,
+        file_name=image.file_name,
+        file_size=image.file_size,
+        mime_type=image.mime_type,
+        category=image.category,
+        title=image.title,
+        description=image.description,
+        is_hidden=image.is_hidden,
+        is_typical=image.is_typical,
+        sort_order=image.sort_order,
+        fiber_source_id=image.fiber_source_id,
+        sizing_agent_id=image.sizing_agent_id,
+        mineral_filler_id=image.mineral_filler_id,
+        batch_id=image.batch_id,
+        record_id=image.record_id,
+        observation_id=image.observation_id,
+        captured_at=image.captured_at,
+        captured_by=image.captured_by,
+        microscope_settings=image.microscope_settings,
+        extra_metadata=image.extra_metadata,
+        created_at=image.created_at,
+        updated_at=image.updated_at,
+        annotations=image.annotations,
+        url=_get_image_url(image.id),
+    )
 
 router = APIRouter(prefix="/statistics", tags=["统计分析"])
 
@@ -182,6 +225,54 @@ def experiment_summary(db: Session = Depends(get_db)):
                 "latest": records_with_dates[-1][0].isoformat(),
             }
 
+    image_query = db.query(ExperimentImage).options(joinedload(ExperimentImage.annotations))
+    if visible_ids:
+        image_query = image_query.filter(
+            (ExperimentImage.batch_id.in_(visible_ids)) |
+            (ExperimentImage.record_id.in_(
+                db.query(PapermakingRecord.id).filter(PapermakingRecord.batch_id.in_(visible_ids))
+            )) |
+            (ExperimentImage.observation_id.in_(
+                db.query(PaperObservation.id).join(PapermakingRecord).filter(PapermakingRecord.batch_id.in_(visible_ids))
+            ))
+        )
+
+    all_images = image_query.all()
+    visible_images = [img for img in all_images if not img.is_hidden]
+    typical_images = [img for img in visible_images if img.is_typical]
+
+    by_category: Dict[str, int] = {}
+    for img in visible_images:
+        by_category[img.category] = by_category.get(img.category, 0) + 1
+
+    typical_summary = []
+    for category in ["raw_material", "wet_paper", "dry_paper", "microscopy"]:
+        cat_typical = [img for img in typical_images if img.category == category]
+        if cat_typical:
+            obs_notes = []
+            for img in cat_typical:
+                if img.observation_id:
+                    obs = db.query(PaperObservation).filter(PaperObservation.id == img.observation_id).first()
+                    if obs and obs.notes:
+                        obs_notes.append(obs.notes)
+                if img.description:
+                    obs_notes.append(img.description)
+
+            typical_summary.append(TypicalImageSummary(
+                category=category,
+                category_name=CATEGORY_NAMES.get(category, category),
+                images=[_to_image_with_url(img) for img in cat_typical],
+                observation_notes=obs_notes,
+            ))
+
+    image_summary = ExperimentImageSummary(
+        total_images=len(all_images),
+        visible_images=len(visible_images),
+        typical_images=len(typical_images),
+        by_category=by_category,
+        typical_summary=typical_summary,
+    )
+
     return ExperimentSummary(
         total_batches=len(all_batches),
         visible_batches=len(visible_batches),
@@ -194,4 +285,5 @@ def experiment_summary(db: Session = Depends(get_db)):
         filler_distribution=filler_dist,
         concentration_stats=concentration_stats,
         date_range=date_range,
+        image_summary=image_summary,
     )

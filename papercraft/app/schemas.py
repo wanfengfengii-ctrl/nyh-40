@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 from enum import Enum
 
@@ -275,6 +275,7 @@ class ExperimentSummary(BaseModel):
     filler_distribution: dict
     concentration_stats: dict
     date_range: Optional[dict]
+    image_summary: Optional["ExperimentImageSummary"] = None
 
 
 class RawPulpComponent(BaseModel):
@@ -432,3 +433,166 @@ class SchemeRecommendationRequest(BaseModel):
     target_concentration: Optional[float] = Field(None, ge=0)
     fiber_preferences: Optional[List[int]] = None
     top_k: int = Field(5, ge=1, le=20)
+
+
+class ImageCategory(str, Enum):
+    raw_material = "raw_material"
+    wet_paper = "wet_paper"
+    dry_paper = "dry_paper"
+    microscopy = "microscopy"
+
+
+class ImageAnnotationCreate(BaseModel):
+    label: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = None
+    region_type: Optional[str] = Field(None, max_length=50)
+    region_data: Optional[Dict[str, Any]] = None
+    color: Optional[str] = Field(None, max_length=20)
+    sort_order: Optional[int] = 0
+
+
+class ImageAnnotationUpdate(BaseModel):
+    label: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = None
+    region_type: Optional[str] = Field(None, max_length=50)
+    region_data: Optional[Dict[str, Any]] = None
+    color: Optional[str] = Field(None, max_length=20)
+    sort_order: Optional[int] = None
+
+
+class ImageAnnotationOut(BaseModel):
+    id: int
+    image_id: int
+    label: str
+    description: Optional[str]
+    region_type: Optional[str]
+    region_data: Optional[Dict[str, Any]]
+    color: Optional[str]
+    sort_order: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ExperimentImageCreate(BaseModel):
+    category: ImageCategory
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    is_hidden: Optional[bool] = False
+    is_typical: Optional[bool] = False
+    sort_order: Optional[int] = 0
+    fiber_source_id: Optional[int] = None
+    sizing_agent_id: Optional[int] = None
+    mineral_filler_id: Optional[int] = None
+    batch_id: Optional[int] = None
+    record_id: Optional[int] = None
+    observation_id: Optional[int] = None
+    captured_at: Optional[datetime] = None
+    captured_by: Optional[str] = Field(None, max_length=100)
+    microscope_settings: Optional[Dict[str, Any]] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
+
+    @model_validator(mode="after")
+    def validate_at_least_one_association(self):
+        associations = [
+            self.fiber_source_id, self.sizing_agent_id, self.mineral_filler_id,
+            self.batch_id, self.record_id, self.observation_id
+        ]
+        if all(a is None for a in associations):
+            raise ValueError("图片必须关联至少一个实验对象（材料、批次、抄纸记录或成纸观察）")
+        return self
+
+
+class ExperimentImageUpdate(BaseModel):
+    category: Optional[ImageCategory] = None
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    is_hidden: Optional[bool] = None
+    is_typical: Optional[bool] = None
+    sort_order: Optional[int] = None
+    fiber_source_id: Optional[int] = None
+    sizing_agent_id: Optional[int] = None
+    mineral_filler_id: Optional[int] = None
+    batch_id: Optional[int] = None
+    record_id: Optional[int] = None
+    observation_id: Optional[int] = None
+    captured_at: Optional[datetime] = None
+    captured_by: Optional[str] = Field(None, max_length=100)
+    microscope_settings: Optional[Dict[str, Any]] = None
+    extra_metadata: Optional[Dict[str, Any]] = None
+
+
+class ExperimentImageOut(BaseModel):
+    id: int
+    file_path: str
+    file_name: str
+    file_size: Optional[int]
+    mime_type: Optional[str]
+    category: str
+    title: Optional[str]
+    description: Optional[str]
+    is_hidden: bool
+    is_typical: bool
+    sort_order: int
+    fiber_source_id: Optional[int]
+    sizing_agent_id: Optional[int]
+    mineral_filler_id: Optional[int]
+    batch_id: Optional[int]
+    record_id: Optional[int]
+    observation_id: Optional[int]
+    captured_at: Optional[datetime]
+    captured_by: Optional[str]
+    microscope_settings: Optional[Dict[str, Any]]
+    extra_metadata: Optional[Dict[str, Any]]
+    created_at: datetime
+    updated_at: datetime
+    annotations: List[ImageAnnotationOut] = []
+
+    model_config = {"from_attributes": True}
+
+
+class ExperimentImageWithUrl(ExperimentImageOut):
+    url: str
+
+
+class BatchTimelineImage(BaseModel):
+    phase: str
+    phase_title: str
+    timestamp: datetime
+    images: List[ExperimentImageWithUrl] = []
+
+
+class BatchTimelineOut(BaseModel):
+    batch_id: int
+    batch_no: str
+    timeline: List[BatchTimelineImage] = []
+
+
+class ImageCompareRequest(BaseModel):
+    image_ids: List[int] = Field(..., min_length=2, max_length=4)
+
+
+class TypicalImageSummary(BaseModel):
+    category: str
+    category_name: str
+    images: List[ExperimentImageWithUrl] = []
+    observation_notes: List[str] = []
+
+
+class ExperimentImageSummary(BaseModel):
+    total_images: int
+    visible_images: int
+    typical_images: int
+    by_category: Dict[str, int]
+    typical_summary: List[TypicalImageSummary] = []
+
+
+class UploadResult(BaseModel):
+    success: bool
+    image_id: Optional[int] = None
+    message: Optional[str] = None
+    file_name: Optional[str] = None
+
+
+ExperimentSummary.model_rebuild()

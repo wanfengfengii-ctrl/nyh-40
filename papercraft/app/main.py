@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.database import init_db
-from app.routers import fibers, batches, records, statistics, import_data, templates
+from app.routers import fibers, batches, records, statistics, import_data, templates, images
 
 app = FastAPI(
     title="纸坊配浆抄纸实验记录系统",
@@ -26,6 +26,7 @@ app.include_router(records.router)
 app.include_router(statistics.router)
 app.include_router(import_data.router)
 app.include_router(templates.router)
+app.include_router(images.router)
 
 app.mount("/static", StaticFiles(directory="frontend"), name="static")
 
